@@ -7,8 +7,7 @@ import time
 import itertools
 
 def build_url(coords, timestamp):
-
-    url= "https://router.project-osrm.org/match/v1/driving/"
+    url= "xxxxxxxxxx" #fill in server for OSRM match
     location = "%s,%s"
     locations = []
     for coord in coords:
@@ -27,8 +26,9 @@ def fetch_result(url):
 
     return result
 
-gpx_file = open('gpx/1701466(15390316)', 'r' )
+gpx_file = open('xxxxxxxxxx.gpx', 'r' ) #fill in gpx to parse
 
+#parse gpx
 gpx_parser = parser.GPXParser( gpx_file )
 gpx_parser.parse()
 
@@ -38,22 +38,49 @@ track = gpx_parser.gpx
 
 points = track.get_points_data()
 points.reverse()
+
+#initiate output arrays
 coords = []
 timestamp = []
+indices = []
+elevation = []
 
 i = 0
-for point in points:
-    if i < 100:
+f = open('output', 'w')
+
+keys = ['gpx_index','gpx_point_x', 'gpx_point_y', 'match_point_x', 'match_point_y', 'way_id', 'gpx_height']
+f.write(';'.join(keys) + '\n')
+
+for index, point in enumerate(points):
+    #iterate in slices of 50 over gpx points
+    #also check if the slice is smaller than 50 at the end of the gpx points array
+    if i < 50 and index < len(points) - 1:
         coords.append((point.point.longitude,point.point.latitude))
         timestamp.append(int(time.mktime(point.point.time.timetuple())))
+        indices.append(index)
+        elevation.append(point.point.elevation)
         i += 1
     else:
-        i = 0
+        #fetch match based on slice
+        i = 2
         url = build_url(coords, timestamp)
+        print url
         result = fetch_result(url)
         tracepoints = result['tracepoints']
+        #fetch output for json response
         for j,coord in enumerate(coords):
-            print coord, tracepoints[j]
-        coords = []
-        timestamp = []
+            if tracepoints[j] != None:
+                match = tracepoints[j]['location']
+                wayInfo = json.loads(tracepoints[j]['name'])
+                coord = {'gpx_index':indices[j],'gpx_point_x':coord[0], 'gpx_point_y':coord[1], 'match_point_x':match[0], 'match_point_y':match[1], 'way_id':wayInfo[0], 'gpx_height':elevation[j]}
+                output = []
+                for key in keys:
+                    output.append(str(coord[key]))
+                f.write(';'.join(output))
+                f.write('\n')
+        #create overlap between slices to avoid missing end point in match
+        coords = coords[-2:]
+        timestamp = timestamp[-2:]
+        indices = indices[-2:]
+        elevation = indices[-2:]
 
